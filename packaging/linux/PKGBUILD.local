@@ -1,0 +1,64 @@
+# Maintainer: Maja Błaszczak <mhb@lineageos.org>
+pkgname=aira
+pkgver=0.1.0.r75.9909c3b
+pkgrel=1
+pkgdesc="An open-source custom controller app for Huawei Earbuds"
+arch=('x86_64')
+url="https://github.com/majaahh/aira"
+license=('GPL-3.0-or-later')
+depends=(
+    'gtk3'
+    'libx11'
+    'libxi'
+    'python'
+    'bluez'
+)
+provides=('aira')
+conflicts=('aira-bin' 'aira-git')
+
+pkgver() {
+    cd "${startdir}/../.." 2>/dev/null || return 0
+    local _ver
+    _ver=$(grep '^version:' pubspec.yaml 2>/dev/null | head -n1 | awk '{print $2}' | cut -d'+' -f1)
+    [ -z "$_ver" ] && _ver="0.1.0"
+
+    if [ "$IS_RELEASE" = "true" ]; then
+        echo "$_ver"
+    else
+        printf "%s.r%s.%s" "$_ver" "$(git rev-list --count HEAD 2>/dev/null || echo 0)" "$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+    fi
+}
+
+package() {
+    local _root="${startdir}/../.."
+    local _bundle="${_root}/build/linux/x64/release/bundle"
+
+    if [ ! -d "$_bundle" ]; then
+        echo "Error: Release bundle not found. Run 'flutter build linux --release' first."
+        return 1
+    fi
+
+    # Install bundle to /usr/lib/aira
+    install -d "${pkgdir}/usr/lib/aira"
+    cp -r "${_bundle}/." "${pkgdir}/usr/lib/aira/"
+
+    # Symlink binary to /usr/bin/aira
+    install -d "${pkgdir}/usr/bin"
+    ln -s /usr/lib/aira/aira "${pkgdir}/usr/bin/aira"
+
+    # Install desktop entry
+    install -Dm644 "${startdir}/io.majaahh.aira.desktop" \
+        "${pkgdir}/usr/share/applications/io.majaahh.aira.desktop"
+
+    # Install icons (Hicolor scalable SVG, multi-resolution PNGs, & Pixmaps)
+    install -Dm644 "${startdir}/icons/hicolor/scalable/apps/io.majaahh.aira.svg" \
+        "${pkgdir}/usr/share/icons/hicolor/scalable/apps/io.majaahh.aira.svg"
+    for sz in 48 64 128 256 512; do
+        install -Dm644 "${startdir}/icons/hicolor/${sz}x${sz}/apps/io.majaahh.aira.png" \
+            "${pkgdir}/usr/share/icons/hicolor/${sz}x${sz}/apps/io.majaahh.aira.png"
+    done
+    install -Dm644 "${startdir}/io.majaahh.aira.png" \
+        "${pkgdir}/usr/share/pixmaps/io.majaahh.aira.png"
+    install -Dm644 "${startdir}/io.majaahh.aira.png" \
+        "${pkgdir}/usr/share/pixmaps/aira.png"
+}

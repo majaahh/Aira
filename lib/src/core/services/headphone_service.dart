@@ -1,0 +1,34 @@
+import '../models/bluetooth_device.dart';
+import '../models/headphone_status.dart';
+
+abstract class HeadphoneService {
+  Stream<HeadphoneStatus> get statusStream;
+  HeadphoneStatus get currentStatus;
+
+  Future<void> connect(String macAddress);
+  Future<void> disconnect();
+  Future<List<BluetoothDevice>> getPairedDevices();
+  Future<List<BluetoothDevice>?> getConnectedDevices({
+    bool requestPermission = false,
+  });
+  Future<List<BluetoothDevice>> scanDevices();
+
+  Future<void> setAncMode(int mode); // 0=Normal, 1=ANC, 2=Transparency, 4=Adaptive
+  Future<void> setAncLevel(int level); // 0=High, 1=Medium, 2=Low (Config ID 11)
+  Future<void> setGameMode(bool enabled);
+  Future<void> setWindNoise(bool enabled);
+  Future<void> setMultipoint(bool enabled);
+  Future<void> setLdac(bool enabled);
+  Future<void> setWearDetection(bool enabled);
+  Future<void> setAntiLeak(bool enabled);
+  Future<void> setAutoShutdown(int timerVal); // Liesheng protocol timer byte (1, 2, 6, 10, 255)
+  Future<void> setSpatialAudio(String mode);
+  Future<void> setSpatialScene(int sceneIdx); // 0=Music, 1=Sport, 2=Movie
+  Future<void> setEqPreset(int presetIdx); // 0-8 (Standard) or 0-4 (S40)
+  Future<void> setCustomEq(List<double> gains); // 10 frequency band gains in dB
+  Future<void> setGesture(int gestureType, int leftFunc, int rightFunc); // Config ID 2
+  Future<void> renameDevice(String newName);
+  Future<void> findDevice(bool play);
+  Future<void> refreshStatus();
+  void dispose();
+}
