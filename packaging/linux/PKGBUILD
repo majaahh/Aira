@@ -1,0 +1,64 @@
+# Maintainer: Maja Błaszczak <mhb@lineageos.org>
+pkgname=aira-git
+pkgver=0.1.0.r0
+pkgrel=1
+pkgdesc="An open-source custom controller app for Huawei Earbuds"
+arch=('x86_64')
+url="https://github.com/majaahh/aira"
+license=('GPL-3.0-or-later')
+depends=(
+    'gtk3'
+    'libx11'
+    'libxi'
+    'python'
+    'bluez'
+)
+makedepends=(
+    'flutter'
+    'git'
+    'cmake'
+    'ninja'
+    'clang'
+)
+provides=('aira')
+conflicts=('aira')
+source=("git+https://github.com/majaahh/aira.git")
+sha256sums=('SKIP')
+
+pkgver() {
+    cd "${srcdir}/Aira"
+    printf "0.1.0.r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+build() {
+    cd "${srcdir}/Aira"
+    flutter build linux --release --dart-define="GIT_HASH=$(git rev-parse --short HEAD)"
+}
+
+package() {
+    cd "${srcdir}/Aira"
+
+    # Install bundle to /usr/lib/aira
+    install -d "${pkgdir}/usr/lib/aira"
+    cp -r build/linux/x64/release/bundle/. "${pkgdir}/usr/lib/aira/"
+
+    # Symlink main binary to /usr/bin/aira
+    install -d "${pkgdir}/usr/bin"
+    ln -s /usr/lib/aira/aira "${pkgdir}/usr/bin/aira"
+
+    # Install desktop launcher entry
+    install -Dm644 packaging/linux/io.majaahh.aira.desktop \
+        "${pkgdir}/usr/share/applications/io.majaahh.aira.desktop"
+
+    # Install icons (Hicolor scalable SVG, multi-resolution PNGs, & Pixmaps)
+    install -Dm644 packaging/linux/icons/hicolor/scalable/apps/io.majaahh.aira.svg \
+        "${pkgdir}/usr/share/icons/hicolor/scalable/apps/io.majaahh.aira.svg"
+    for sz in 48 64 128 256 512; do
+        install -Dm644 "packaging/linux/icons/hicolor/${sz}x${sz}/apps/io.majaahh.aira.png" \
+            "${pkgdir}/usr/share/icons/hicolor/${sz}x${sz}/apps/io.majaahh.aira.png"
+    done
+    install -Dm644 packaging/linux/io.majaahh.aira.png \
+        "${pkgdir}/usr/share/pixmaps/io.majaahh.aira.png"
+    install -Dm644 packaging/linux/io.majaahh.aira.png \
+        "${pkgdir}/usr/share/pixmaps/aira.png"
+}
