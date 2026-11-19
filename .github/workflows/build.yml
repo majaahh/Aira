@@ -1,0 +1,186 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-linux:
+    name: Linux (Generic, AppImage & Arch)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Get Short SHA
+        id: vars
+        run: echo "short_sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libx11-dev libxi-dev
+
+      - name: Build Linux Tarball and AppImage
+        run: ./scripts/build_linux.sh --release --appimage
+
+      - name: Build Arch Linux Package
+        run: |
+          docker run --rm -v "${{ github.workspace }}":/workspace -w /workspace archlinux:base-devel bash -c "
+            pacman -Syu --noconfirm git sudo zstd &&
+            useradd -m builder &&
+            chown -R builder:builder /workspace &&
+            sudo -u builder bash -c 'git config --global --add safe.directory /workspace && cd /workspace/packaging/linux && makepkg -p PKGBUILD.local -f -d --noconfirm' &&
+            mkdir -p /workspace/dist &&
+            cp /workspace/packaging/linux/*.pkg.tar.zst /workspace/dist/
+          "
+
+      - name: Upload Linux Generic Tarball
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-x64-tarball-${{ steps.vars.outputs.short_sha }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+      - name: Upload Linux AppImage
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-x64-appimage-${{ steps.vars.outputs.short_sha }}
+          path: dist/*.AppImage
+          if-no-files-found: error
+
+      - name: Upload Arch Linux Package
+        uses: actions/upload-artifact@v7
+        with:
+          name: arch-linux-pkg-${{ steps.vars.outputs.short_sha }}
+          path: dist/*.pkg.tar.zst
+          if-no-files-found: error
+
+  build-windows:
+    name: Windows (ZIP & Setup Installer)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Get Short SHA
+        id: vars
+        shell: pwsh
+        run: |
+          $ShortSha = (git rev-parse --short HEAD).Trim()
+          "short_sha=$ShortSha" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install Inno Setup
+        run: |
+          choco install innosetup --no-progress
+
+      - name: Build Windows Application & Setup Installer
+        shell: pwsh
+        run: ./scripts/build_windows.ps1 -Release
+
+      - name: Upload Windows Standalone ZIP
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-x64-zip-${{ steps.vars.outputs.short_sha }}
+          path: dist/*.zip
+          if-no-files-found: error
+
+      - name: Upload Windows Setup Installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-x64-setup-${{ steps.vars.outputs.short_sha }}
+          path: dist/*.exe
+          if-no-files-found: error
+
+  build-android:
+    name: Android (Debug & Release APKs)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Get Short SHA
+        id: vars
+        run: echo "short_sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Configure Keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "==> Decoding release keystore..."
+            echo "$KEYSTORE_BASE64" | base64 -d > android/app/upload-keystore.jks
+            cat << EOF > android/key.properties
+          storePassword=${STORE_PASSWORD}
+          keyPassword=${KEY_PASSWORD}
+          keyAlias=${KEY_ALIAS}
+          storeFile=upload-keystore.jks
+          EOF
+          else
+            echo "==> No release keystore secret found. Falling back to debug signing config."
+          fi
+
+      - name: Build Android Debug APKs
+        run: |
+          ./scripts/build_android.sh
+          mkdir -p dist/debug-apks
+          mv dist/*-debug.apk dist/debug-apks/
+
+      - name: Build Android Release APKs
+        run: |
+          ./scripts/build_android.sh --release
+          mkdir -p dist/release-apks
+          mv dist/Aira-${{ steps.vars.outputs.short_sha }}-*.apk dist/release-apks/
+
+      - name: Upload Android Debug APKs
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-debug-apks-${{ steps.vars.outputs.short_sha }}
+          path: dist/debug-apks/*
+          if-no-files-found: error
+
+      - name: Upload Android Release APKs
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-release-apks-${{ steps.vars.outputs.short_sha }}
+          path: dist/release-apks/*
+          if-no-files-found: error

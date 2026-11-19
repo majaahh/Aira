@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Aira
+GenericName=Bluetooth Headset Controller
+Comment=Custom companion controller for Huawei Earbuds
+Exec=aira %u
+Icon=io.majaahh.aira
+Terminal=false
+Type=Application
+Categories=AudioVideo;Audio;HardwareSettings;Settings;
+Keywords=huawei;bluetooth;headphones;headset;anc;equalizer;
+StartupWMClass=io.majaahh.aira
